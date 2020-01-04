@@ -69,7 +69,7 @@ class CheckAttendance(App):
 
     def go_home(self, instance):
         self.layout.clear_widgets()
-        MainApp().run()
+        MakeList(1).run()
 
     def reset(self, instance):
         sql = f"update Attendance_Data set missed=0,total=0 where subject_name=\"{self.subject}\""
