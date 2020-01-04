@@ -1,0 +1,3 @@
+uname = "anubhavdinkar"
+pwd = "&Anubhav2699"
+host = "localhost"

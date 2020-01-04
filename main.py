@@ -50,7 +50,7 @@ class CheckAttendance(App):
         self.attendance_display.text = string
         self.attendance_display.bold = True
 
-        subject_display = Label(text=self.subject + ":        ")
+        subject_display = Label(text=self.subject + "        ")
         subject_display.bold = True
 
         missed_class = Button(text="Missed a Class", on_press=self.missed_class)
