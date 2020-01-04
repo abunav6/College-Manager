@@ -42,9 +42,10 @@ class CheckAttendance(App):
             sql = f"insert into Attendance_Data (subject_name, missed, total) values(\"{self.subject}\",0,0)"
             cur.execute(sql)
         if self.total:
-            string = f"{self.total - self.missed} / {self.total}"
+            percentage = 100 * round(((self.total - self.missed) / self.total), 4)
+            string = f"{self.total - self.missed} / {self.total}          {percentage}%"
         else:
-            string = "0/0"
+            string = "0/0          0%"
 
         self.attendance_display.text = string
         self.attendance_display.bold = True
@@ -53,7 +54,7 @@ class CheckAttendance(App):
         subject_display.bold = True
 
         missed_class = Button(text="Missed a Class", on_press=self.missed_class)
-        attended_class = Button(text="Attended a class")
+        attended_class = Button(text="Attended a class", on_press=self.attended_class)
 
         close = Button(text="Close", on_press=self.go_home)
         clear_all = Button(text="Clear All Data", on_press=self.reset)
@@ -91,11 +92,20 @@ class CheckAttendance(App):
     def missed_class(self, instance):
         self.missed += 1
         self.total += 1
-        string = f"{self.total - self.missed} / {self.total}"
+        percentage = 100 * round(((self.total - self.missed) / self.total), 4)
+        string = f"{self.total - self.missed} / {self.total}          {percentage}%"
         sql = f"update Attendance_Data set missed = {self.missed}, total={self.total} where subject_name=\"{self.subject}\""
         cur.execute(sql)
         self.attendance_display.text = string
         return
+
+    def attended_class(self, instance):
+        self.total += 1
+        percentage = 100 * round(((self.total - self.missed) / self.total), 4)
+        string = f"{self.total - self.missed} / {self.total}          {percentage}%"
+        sql = f"update Attendance_Data set total={self.total} where subject_name=\"{self.subject}\""
+        cur.execute(sql)
+        self.attendance_display.text = string
 
 
 class MakeList(App):
