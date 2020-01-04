@@ -1,0 +1,10 @@
+cd ~/Desktop/College\ Manager/
+rm -rf dist
+rm -rf setup.py
+rm -rf ~/Desktop/CollegeManager.app
+py2applet --make-setup main.py >/dev/null
+python3 setup.py py2app -A >/dev/null
+mv dist/main.app ~/Desktop/CollegeManager.app
+rm -rf dist
+rm -rf setup.py
+rm -rf build
