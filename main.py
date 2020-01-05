@@ -1,6 +1,6 @@
+import re
 from functools import partial
 
-import mysql.connector as mysql
 from kivy.app import App
 from kivy.core.window import Window
 from kivy.uix.button import Button
@@ -10,12 +10,133 @@ from kivy.uix.label import Label
 from kivy.uix.popup import Popup
 from kivy.uix.textinput import TextInput
 
+from sql_conf import Login
 
-def check_if_exists(name):
-    sql = "select subject_name from Subject_Data"
+
+def check_if_exists(name, table):
+    sql = f"select subject_name from {table}"
     cur.execute(sql)
     names = [k[0] for k in cur.fetchall()]
     return name in names
+
+
+class CheckMarks(App):
+
+    def __init__(self, name, **kwargs):
+        super().__init__(**kwargs)
+        self.max_marks = []
+        self.ss_field = TextInput()
+        self.inputs_test, self.inputs_quiz = [], []
+        self.layout = GridLayout(rows=10, cols=2, row_force_default=True, row_default_height=50,
+                                 pos_hint={'center_x': .5})
+        self.subject_name = name.text
+        self.title = self.subject_name
+        Window.size = (850, 450)
+
+    def build(self):
+        regex = "(.*):\s+(.*)"
+        with open("/Users/anubhavdinkar/Desktop/CollegeManager/subject_data.txt", "r") as file:
+            lines = file.readlines()
+            flag = False
+            for line in lines:
+                x = re.findall(regex, line)[0]
+                if x[0] == self.subject_name:
+                    flag = True
+                    max_marks = x[-1]
+                    break
+
+        if flag:
+            try:
+                sql = f"select *from Test_Data where subject_name = \"{self.subject_name}\""
+                cur.execute(sql)
+                data = cur.fetchall()
+                if not data:
+                    sql = f"insert into Test_Data (subject_name,t1,q1,t2,q2,t3,q3,ss) values(\"{self.subject_name}\",NULL,NULL,NULL,NULL,NULL,NULL,NULL)"
+                    cur.execute(sql)
+                    test = [None] * 3
+                    quiz = [None] * 3
+                    ss_mark = None
+                else:
+                    t1, q1, t2, q2, t3, q3, ss_mark = data[0][1:]
+                    test = [t1, t2, t3]
+                    quiz = [q1, q2, q3]
+
+            except Exception as e:
+                print(e)
+
+            self.max_marks = [int(k) for k in max_marks.split("+")]
+
+            for i in range(3):
+                lbl = Label(text=f"Test {i + 1}")
+                lbl2 = Label(text=f"Quiz {i + 1}")
+                field = TextInput()
+
+                field2 = TextInput()
+                field.text = str(test[i]) if test[i] else ""
+                self.inputs_test.append(field)
+                field2.text = str(quiz[i]) if test[i] else ""
+                self.inputs_quiz.append(field2)
+
+                self.layout.add_widget(lbl)
+                self.layout.add_widget(field)
+
+                self.layout.add_widget(lbl2)
+                self.layout.add_widget(field2)
+
+            ss = Label(text="Self Study")
+            self.layout.add_widget(ss)
+            self.layout.add_widget(self.ss_field)
+            self.ss_field.text = str(ss_mark) if ss_mark else ""
+            if len(max_marks) == 4:
+                lab_btn = Button(text="Lab", on_press=self.launch_lab)
+                self.layout.add_widget(lab_btn)
+
+            self.layout.add_widget(Button(text="Submit", on_press=self.submit))
+            self.layout.add_widget(Button(text="Clear all Data", on_press=self.clear_all))
+            self.layout.add_widget(Button(text="Close", on_press=self.home))
+
+            return self.layout
+
+    def launch_lab(self, instance):
+        print("LAB")
+
+    def home(self, instance):
+        self.layout.clear_widgets()
+        MakeList(3).run()
+
+    def submit(self, instance):
+        test_marks = []
+        quiz_marks = []
+        for i in range(3):
+            test_marks.append(float(self.inputs_test[i].text) if self.inputs_test[i].text else None)
+            quiz_marks.append(float(self.inputs_quiz[i].text) if self.inputs_quiz[i].text else None)
+        self_study = float(self.ss_field.text) if self.ss_field.text else None
+
+        # print(test_marks, quiz_marks, self_study)
+
+        # the below code assumes the input is valid from the user, modify it to handle wrong inputs
+        for i in range(len(test_marks)):
+            if test_marks[i]:
+                sql = f"update Test_Data set t{i + 1}={test_marks[i]} where subject_name=\"{self.subject_name}\""
+                cur.execute(sql)
+            if quiz_marks[i]:
+                sql = f"update Test_Data set q{i + 1}={quiz_marks[i]} where subject_name=\"{self.subject_name}\""
+                cur.execute(sql)
+
+        if self_study:
+            sql = f"update Test_Data set ss={self_study} where subject_name=\"{self.subject_name}\""
+            cur.execute(sql)
+
+        self.layout.clear_widgets()
+        MakeList(3).run()
+
+    def clear_all(self, instance):
+        sql = f"delete from Test_Data where subject_name=\"{self.subject_name}\""
+        cur.execute(sql)
+        self.layout.clear_widgets()
+        MakeList(3).run()
+
+
 
 
 class CheckAttendance(App):
@@ -135,6 +256,8 @@ class MakeList(App):
                 btn.bind(on_press=partial(self.remove_subject, data[s]))
             elif self.code == 1:
                 btn.bind(on_press=partial(self.check_attend, data[s]))
+            elif self.code == 3:
+                btn.bind(on_press=partial(self.check_marks, data[s]))
             else:
                 print("welp")
             self.layout.add_widget(btn)
@@ -165,6 +288,10 @@ class MakeList(App):
         self.layout.clear_widgets()
         CheckAttendance(name).run()
 
+    def check_marks(self, instance, name):
+        self.layout.clear_widgets()
+        CheckMarks(name).run()
+
 
 class AddSubject(App):
     def __init__(self, **kwargs):
@@ -192,7 +319,6 @@ class AddSubject(App):
         MainApp().run()
 
     def build(self):
-
         self.layout.add_widget(self.name_prompt)
         self.layout.add_widget(self.sub_name)
         self.layout.add_widget(self.cred_prompt)
@@ -211,7 +337,7 @@ class AddSubject(App):
             if 1 <= cred <= 5:
                 layout = GridLayout(rows=2, row_force_default=True, row_default_height=50,
                                     pos_hint={'center_x': .5})
-                if not check_if_exists(self.sub_name.text):
+                if not check_if_exists(self.sub_name.text, "Subject_Data"):
                     sql = f"insert into Subject_Data (subject_name,credits,lab) values(" \
                           f"\"{self.sub_name.text}\",{cred},{state})"
                     cur.execute(sql)
@@ -258,7 +384,7 @@ class MainApp(App):
 
     def check_mark(self, instance):
         self.layout.clear_widgets()
-        print("Marks")
+        MakeList(3).run()
 
     def add_subject(self, instance):
         self.layout.clear_widgets()
@@ -270,13 +396,6 @@ class MainApp(App):
 
 
 if __name__ == '__main__':
-    CALL_CODE = -1
     app = MainApp()
-    cnx = mysql.connect(user="anubhavdinkar", password="&Anubhav2699", host="localhost")
-    cur = cnx.cursor()
-    cur.execute("create database if not exists College_Manager")
-    cur.execute("use College_Manager")
-    cur.execute("create table if not exists Subject_Data (subject_name LONGTEXT, credits INT, lab INT)")
-    cur.execute("create table if not exists Attendance_Data (subject_name LONGTEXT, missed INT, total INT)")
-    cnx.autocommit = True
+    cnx, cur = Login().connect()
     app.run()
