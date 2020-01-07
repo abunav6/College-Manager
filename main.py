@@ -20,6 +20,18 @@ def check_if_exists(name, table):
     return name in names
 
 
+def get_gpa(grades, credits):
+    grade_points = {'S': 10, 'A': 9, 'B': 8, 'C': 7, 'D': 6, 'E': 5, 'F': 0}
+    if None not in grades and len(grades) == len(credits):
+        score = 0
+        for k in range(len(grades)):
+            score += grade_points[grades[k]] * credits[k]
+
+        return round(score / sum(credits), 2)
+
+    return "not enough data"
+
+
 class CheckMarks(App):
 
     def __init__(self, name, **kwargs):
@@ -27,11 +39,12 @@ class CheckMarks(App):
         self.max_marks = []
         self.ss_field = TextInput()
         self.inputs_test, self.inputs_quiz = [], []
-        self.layout = GridLayout(rows=10, cols=2, row_force_default=True, row_default_height=50,
+        self.layout = GridLayout(rows=12, cols=2, row_force_default=True, row_default_height=50,
                                  pos_hint={'center_x': .5})
         self.subject_name = name.text
         self.title = self.subject_name
-        Window.size = (850, 450)
+        Window.size = (850, 470)
+
 
     def build(self):
         regex = "(.*):\s+(.*)"
@@ -50,16 +63,27 @@ class CheckMarks(App):
                 sql = f"select *from Test_Data where subject_name = \"{self.subject_name}\""
                 cur.execute(sql)
                 data = cur.fetchall()
+                test = [None] * 3
+                quiz = [None] * 3
+                ss_mark = None
+
                 if not data:
-                    sql = f"insert into Test_Data (subject_name,t1,q1,t2,q2,t3,q3,ss) values(\"{self.subject_name}\",NULL,NULL,NULL,NULL,NULL,NULL,NULL)"
+                    sql = f"insert into Test_Data (subject_name,t1,q1,t2,q2,t3,q3,ss,grade,percentage) values(\"{self.subject_name}\",NULL,NULL,NULL,NULL,NULL,NULL,NULL,NULL,NULL)"
                     cur.execute(sql)
-                    test = [None] * 3
-                    quiz = [None] * 3
-                    ss_mark = None
+
+
                 else:
-                    t1, q1, t2, q2, t3, q3, ss_mark = data[0][1:]
+                    t1, q1, t2, q2, t3, q3, ss_mark = data[0][1:-2]
                     test = [t1, t2, t3]
                     quiz = [q1, q2, q3]
+                    existing_grade = data[0][-2]
+                    existing_percentage = data[0][-1]
+                    print(existing_grade, existing_percentage)
+                    if existing_percentage and existing_grade:
+                        self.layout.add_widget(Label(text=f"Grade: {existing_grade}", bold=True))
+                        self.layout.add_widget(Label(text=f"Percentage: {existing_percentage}%", bold=True))
+                    Window.size = (850, 510)
+
 
             except Exception as e:
                 print(e)
@@ -74,7 +98,7 @@ class CheckMarks(App):
                 field2 = TextInput()
                 field.text = str(test[i]) if test[i] else ""
                 self.inputs_test.append(field)
-                field2.text = str(quiz[i]) if test[i] else ""
+                field2.text = str(quiz[i]) if quiz[i] else ""
                 self.inputs_quiz.append(field2)
 
                 self.layout.add_widget(lbl)
@@ -87,7 +111,7 @@ class CheckMarks(App):
             self.layout.add_widget(ss)
             self.layout.add_widget(self.ss_field)
             self.ss_field.text = str(ss_mark) if ss_mark else ""
-            if len(max_marks) == 4:
+            if len(self.max_marks) == 4:
                 lab_btn = Button(text="Lab", on_press=self.launch_lab)
                 self.layout.add_widget(lab_btn)
 
@@ -105,6 +129,13 @@ class CheckMarks(App):
         MakeList(3).run()
 
     def submit(self, instance):
+        if self.max_marks[0] == 30:
+            self.MT = 25  # change the MT after TEST 1 (as it could be out of 30 too)
+        else:
+            self.MT = 50
+
+        reduction_factor = self.max_marks[0] / (3 * self.MT)
+        qrf = self.max_marks[1] / (3 * 10)
         test_marks = []
         quiz_marks = []
         for i in range(3):
@@ -112,20 +143,21 @@ class CheckMarks(App):
             quiz_marks.append(float(self.inputs_quiz[i].text) if self.inputs_quiz[i].text else None)
         self_study = float(self.ss_field.text) if self.ss_field.text else None
 
-        # print(test_marks, quiz_marks, self_study)
+        test_count = self.attempts(test_marks)
+        quiz_count = self.attempts(quiz_marks)
 
-        # the below code assumes the input is valid from the user, modify it to handle wrong inputs
+        score, max_score = self.calc_score(test_marks, quiz_marks, reduction_factor, self_study, qrf, test_count,
+                                           quiz_count)
+
+        grade, percentage = self.get_grade(score, max_score)
+
+        sql = f"update Test_Data set grade = \"{grade}\", percentage = {percentage} where subject_name = \"{self.subject_name}\""
+        cur.execute(sql)
+
         for i in range(len(test_marks)):
-            if test_marks[i]:
-                sql = f"update Test_Data set t{i + 1}={test_marks[i]} where subject_name=\"{self.subject_name}\""
-                cur.execute(sql)
-            if quiz_marks[i]:
-                sql = f"update Test_Data set q{i + 1}={quiz_marks[i]} where subject_name=\"{self.subject_name}\""
-                cur.execute(sql)
-
-        if self_study:
-            sql = f"update Test_Data set ss={self_study} where subject_name=\"{self.subject_name}\""
-            cur.execute(sql)
+            self.update(test_marks[i], f"t{i + 1}")
+            self.update(quiz_marks[i], f"q{i + 1}")
+        self.update(self_study, "ss")
 
         self.layout.clear_widgets()
         MakeList(3).run()
@@ -136,7 +168,65 @@ class CheckMarks(App):
         self.layout.clear_widgets()
         MakeList(3).run()
 
+    def attempts(self, marks):
+        count = 0
+        for k in marks:
+            if k:
+                count += 1
+        return count
 
+    def calc_score(self, t, q, rf, ss, qrf, tc, qc):
+        score = 0
+        max_score = 0
+        for test in t:
+
+            if test:
+                print(test)
+                score += test * rf
+
+        for quiz in q:
+            if quiz:
+                print(quiz)
+                score += quiz * qrf
+        if ss:
+            print(ss)
+            max_score += self.max_marks[2]
+            score += ss
+
+        max_score += (tc * self.MT * rf) + (qc * 10 * qrf)
+        return score, max_score
+
+    @staticmethod
+    def get_grade(sc, ma):
+        perc = round(100 * round(sc / ma, 4))
+        if 90 <= perc <= 100:
+            grade = "S"
+        elif 80 <= perc < 90:
+            grade = "A"
+
+        elif 70 <= perc < 80:
+            grade = "B"
+
+        elif 60 <= perc < 70:
+            grade = "C"
+
+        elif 50 <= perc < 60:
+            grade = "D"
+
+        elif 40 <= perc < 50:
+            grade = "E"
+
+        else:
+            grade = "F"
+
+        return grade, perc
+
+    def update(self, element, column):
+        if element:
+            sql = f"update Test_Data set {column} ={element} where subject_name = \"{self.subject_name}\""
+        else:
+            sql = f"update Test_Data set {column} = NULL where subject_name = \"{self.subject_name}\""
+        cur.execute(sql)
 
 
 class CheckAttendance(App):
@@ -236,8 +326,24 @@ class MakeList(App):
         self.code = code
         self.layout = GridLayout(cols=1, row_force_default=True, row_default_height=50,
                                  pos_hint={'center_x': .5})
+        if self.code == 1:
+            self.title = "Delete Subject Data"
         if self.code == 2:
+            self.title = "Check Attendance"
             self.popup = Popup(title="Deleting subject", auto_dismiss=False)
+
+        if self.code == 3:
+            self.title = "Check Marks"
+
+        sql = "select grade from Test_Data"
+        cur.execute(sql)
+        data = cur.fetchall()
+
+        sql = "select credits from Subject_Data"
+        cur.execute(sql)
+        creds = [k[0] for k in cur.fetchall()]
+
+        self.result = get_gpa([k[0] for k in data], creds)
 
     def home(self, instance):
         self.popup.dismiss()
@@ -249,7 +355,11 @@ class MakeList(App):
         cur.execute(sql)
         data = [k[0] for k in cur.fetchall()]
         size = len(data)
-        self.layout.rows = size + 1
+        self.layout.rows = size + 3
+        if type(self.result) == float:
+            self.layout.add_widget(Label(text=f"Current SGPA:", bold=True))
+            self.layout.add_widget(Label(text=f"{self.result}", bold=True))
+            Window.size = (800, 510)
         for s in range(size):
             btn = Button(text=data[s])
             if self.code == 2:
@@ -297,7 +407,7 @@ class AddSubject(App):
     def __init__(self, **kwargs):
         super().__init__(**kwargs)
         Window.size = (1000, 250)
-
+        self.title = "Add Subject Data"
         self.layout = GridLayout(rows=4, cols=2, row_force_default=True, row_default_height=50,
                                  pos_hint={'center_x': .5})
 

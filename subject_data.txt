@@ -3,5 +3,5 @@ Communication Systems II: 60+30+10+50
 Analog and Mixed Signal IC Design: 60+30+10
 Foundations of Management and Economics: 30+15+5
 Database Management Systems: 50+30+20
-Data Structures using C++: 50+30+20
+Data Structures using C++: 60+30+10
 Bioinspired Engineering: 60+30+10
