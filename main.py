@@ -326,9 +326,9 @@ class MakeList(App):
         self.code = code
         self.layout = GridLayout(cols=1, row_force_default=True, row_default_height=50,
                                  pos_hint={'center_x': .5})
-        if self.code == 1:
-            self.title = "Delete Subject Data"
         if self.code == 2:
+            self.title = "Delete Subject Data"
+        if self.code == 1:
             self.title = "Check Attendance"
             self.popup = Popup(title="Deleting subject", auto_dismiss=False)
 
