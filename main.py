@@ -169,7 +169,8 @@ class CheckMarks(App):
         self.stop()
         MakeList(3).run()
 
-    def attempts(self, marks):
+    @staticmethod
+    def attempts(marks):
         count = 0
         for k in marks:
             if k:
@@ -364,10 +365,18 @@ class MakeList(App):
         cur.execute(sql)
         data = [k[0] for k in cur.fetchall()]
         size = len(data)
+
+        sql = "select credits from Subject_Data"
+        cur.execute(sql)
+        creds = [k[0] for k in cur.fetchall()]
+
         self.layout.rows = size + 3
         if type(self.result) == float:
-            self.layout.add_widget(Label(text=f"Current SGPA:", bold=True))
-            self.layout.add_widget(Label(text=f"{self.result}", bold=True))
+            current_cgpa = round((25 * (9.2 + 9 + 8.8 + 8.44) + 29 * 8.45 + sum(creds) * self.result) / (
+                    25 * 4 + 29 + sum(creds)), 2)
+            self.layout.add_widget(Label(text=f"Current SGPA: {self.result}", bold=True))
+            self.layout.add_widget(Label(text=f"Current CGPA: {current_cgpa}", bold=True))
+
             Window.size = (800, 510)
         for s in range(size):
             btn = Button(text=data[s])
@@ -402,7 +411,7 @@ class MakeList(App):
         sql = f"delete from Subject_Data where subject_name = \"{name.text}\""
         try:
             cur.execute(sql)
-        except Exception as e:
+        except Exception:
             pass
 
     def check_attend(self, _, name):
