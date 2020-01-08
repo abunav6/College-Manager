@@ -20,14 +20,14 @@ def check_if_exists(name, table):
     return name in names
 
 
-def get_gpa(grades, credits):
+def get_gpa(grades, max_creds):
     grade_points = {'S': 10, 'A': 9, 'B': 8, 'C': 7, 'D': 6, 'E': 5, 'F': 0}
-    if None not in grades and len(grades) == len(credits):
+    if None not in grades and len(grades) == len(max_creds):
         score = 0
         for k in range(len(grades)):
-            score += grade_points[grades[k]] * credits[k]
+            score += grade_points[grades[k]] * max_creds[k]
 
-        return round(score / sum(credits), 2)
+        return round(score / sum(max_creds), 2)
 
     return "not enough data"
 
@@ -36,6 +36,7 @@ class CheckMarks(App):
 
     def __init__(self, name, **kwargs):
         super().__init__(**kwargs)
+        self.MT = 50
         self.max_marks = []
         self.ss_field = TextInput()
         self.inputs_test, self.inputs_quiz = [], []
@@ -44,7 +45,6 @@ class CheckMarks(App):
         self.subject_name = name.text
         self.title = self.subject_name
         Window.size = (850, 470)
-
 
     def build(self):
         regex = "(.*):\s+(.*)"
@@ -59,18 +59,18 @@ class CheckMarks(App):
                     break
 
         if flag:
+            test = [None] * 3
+            quiz = [None] * 3
+            ss_mark = None
             try:
                 sql = f"select *from Test_Data where subject_name = \"{self.subject_name}\""
                 cur.execute(sql)
                 data = cur.fetchall()
-                test = [None] * 3
-                quiz = [None] * 3
-                ss_mark = None
 
                 if not data:
-                    sql = f"insert into Test_Data (subject_name,t1,q1,t2,q2,t3,q3,ss,grade,percentage) values(\"{self.subject_name}\",NULL,NULL,NULL,NULL,NULL,NULL,NULL,NULL,NULL)"
+                    sql = f"insert into Test_Data (subject_name,t1,q1,t2,q2,t3,q3,ss,grade,percentage) values" \
+                          f"(\"{self.subject_name}\",NULL,NULL,NULL,NULL,NULL,NULL,NULL,NULL,NULL) "
                     cur.execute(sql)
-
 
                 else:
                     t1, q1, t2, q2, t3, q3, ss_mark = data[0][1:-2]
@@ -78,15 +78,13 @@ class CheckMarks(App):
                     quiz = [q1, q2, q3]
                     existing_grade = data[0][-2]
                     existing_percentage = data[0][-1]
-                    print(existing_grade, existing_percentage)
                     if existing_percentage and existing_grade:
                         self.layout.add_widget(Label(text=f"Grade: {existing_grade}", bold=True))
                         self.layout.add_widget(Label(text=f"Percentage: {existing_percentage}%", bold=True))
                     Window.size = (850, 510)
 
-
-            except Exception as e:
-                print(e)
+            except Exception:
+                pass
 
             self.max_marks = [int(k) for k in max_marks.split("+")]
 
@@ -121,18 +119,18 @@ class CheckMarks(App):
 
             return self.layout
 
-    def launch_lab(self, instance):
-        print("LAB")
+    @staticmethod
+    def launch_lab(_):
+        pass
 
-    def home(self, instance):
+    def home(self, _):
         self.layout.clear_widgets()
+        self.stop()
         MakeList(3).run()
 
-    def submit(self, instance):
+    def submit(self, _):
         if self.max_marks[0] == 30:
             self.MT = 25  # change the MT after TEST 1 (as it could be out of 30 too)
-        else:
-            self.MT = 50
 
         reduction_factor = self.max_marks[0] / (3 * self.MT)
         qrf = self.max_marks[1] / (3 * 10)
@@ -146,26 +144,29 @@ class CheckMarks(App):
         test_count = self.attempts(test_marks)
         quiz_count = self.attempts(quiz_marks)
 
-        score, max_score = self.calc_score(test_marks, quiz_marks, reduction_factor, self_study, qrf, test_count,
-                                           quiz_count)
+        if test_count or quiz_count or self_study:
+            score, max_score = self.calc_score(test_marks, quiz_marks, reduction_factor, self_study, qrf, test_count,
+                                               quiz_count)
 
-        grade, percentage = self.get_grade(score, max_score)
+            grade, percentage = self.get_grade(score, max_score)
 
-        sql = f"update Test_Data set grade = \"{grade}\", percentage = {percentage} where subject_name = \"{self.subject_name}\""
-        cur.execute(sql)
-
-        for i in range(len(test_marks)):
-            self.update(test_marks[i], f"t{i + 1}")
-            self.update(quiz_marks[i], f"q{i + 1}")
-        self.update(self_study, "ss")
+            sql = f"update Test_Data set grade = \"{grade}\", percentage = {percentage}" \
+                  f" where subject_name = \"{self.subject_name}\""
+            cur.execute(sql)
+            for i in range(len(test_marks)):
+                self.update(test_marks[i], f"t{i + 1}")
+                self.update(quiz_marks[i], f"q{i + 1}")
+            self.update(self_study, "ss")
 
         self.layout.clear_widgets()
+        self.stop()
         MakeList(3).run()
 
-    def clear_all(self, instance):
+    def clear_all(self, _):
         sql = f"delete from Test_Data where subject_name=\"{self.subject_name}\""
         cur.execute(sql)
         self.layout.clear_widgets()
+        self.stop()
         MakeList(3).run()
 
     def attempts(self, marks):
@@ -181,15 +182,12 @@ class CheckMarks(App):
         for test in t:
 
             if test:
-                print(test)
                 score += test * rf
 
         for quiz in q:
             if quiz:
-                print(quiz)
                 score += quiz * qrf
         if ss:
-            print(ss)
             max_score += self.max_marks[2]
             score += ss
 
@@ -198,9 +196,14 @@ class CheckMarks(App):
 
     @staticmethod
     def get_grade(sc, ma):
-        perc = round(100 * round(sc / ma, 4))
+        try:
+            perc = round(100 * round(sc / ma, 4))
+        except ZeroDivisionError:
+            return
+
         if 90 <= perc <= 100:
             grade = "S"
+
         elif 80 <= perc < 90:
             grade = "A"
 
@@ -279,11 +282,12 @@ class CheckAttendance(App):
         self.layout.add_widget(clear_all)
         return self.layout
 
-    def go_home(self, instance):
+    def go_home(self, _):
         self.layout.clear_widgets()
+        self.stop()
         MakeList(1).run()
 
-    def reset(self, instance):
+    def reset(self, _):
         sql = f"update Attendance_Data set missed=0,total=0 where subject_name=\"{self.subject}\""
         cur.execute(sql)
         layout = GridLayout(rows=2, row_force_default=True, row_default_height=50,
@@ -295,22 +299,24 @@ class CheckAttendance(App):
         self.popup.open()
         btn.bind(on_press=self.home)
 
-    def home(self, instance):
+    def home(self, _):
         self.popup.dismiss()
         self.layout.clear_widgets()
+        self.stop()
         MakeList(1).run()
 
-    def missed_class(self, instance):
+    def missed_class(self, _):
         self.missed += 1
         self.total += 1
         percentage = 100 * round(((self.total - self.missed) / self.total), 4)
         string = f"{self.total - self.missed} / {self.total}          {percentage}%"
-        sql = f"update Attendance_Data set missed = {self.missed}, total={self.total} where subject_name=\"{self.subject}\""
+        sql = f"update Attendance_Data set missed = {self.missed}, total={self.total}" \
+              f" where subject_name=\"{self.subject}\""
         cur.execute(sql)
         self.attendance_display.text = string
         return
 
-    def attended_class(self, instance):
+    def attended_class(self, _):
         self.total += 1
         percentage = 100 * round(((self.total - self.missed) / self.total), 4)
         string = f"{self.total - self.missed} / {self.total}          {percentage}%"
@@ -326,11 +332,13 @@ class MakeList(App):
         self.code = code
         self.layout = GridLayout(cols=1, row_force_default=True, row_default_height=50,
                                  pos_hint={'center_x': .5})
-        if self.code == 2:
-            self.title = "Delete Subject Data"
+
         if self.code == 1:
             self.title = "Check Attendance"
             self.popup = Popup(title="Deleting subject", auto_dismiss=False)
+
+        if self.code == 2:
+            self.title = "Delete Subject Data"
 
         if self.code == 3:
             self.title = "Check Marks"
@@ -345,9 +353,10 @@ class MakeList(App):
 
         self.result = get_gpa([k[0] for k in data], creds)
 
-    def home(self, instance):
+    def home(self, _):
         self.popup.dismiss()
         self.layout.clear_widgets()
+        self.stop()
         MainApp().run()
 
     def build(self):
@@ -369,17 +378,18 @@ class MakeList(App):
             elif self.code == 3:
                 btn.bind(on_press=partial(self.check_marks, data[s]))
             else:
-                print("welp")
+                pass
             self.layout.add_widget(btn)
         self.layout.add_widget(Button(text="Close", on_press=self.go_to_main))
         return self.layout
 
-    def go_to_main(self, instance):
+    def go_to_main(self, _):
         self.layout.clear_widgets()
+        self.stop()
         MainApp().run()
 
-    def remove_subject(self, instance, name):
-        sql = f"delete from Subject_Data where subject_name = \"{name.text}\""
+    def remove_subject(self, _, name):
+
         layout = GridLayout(rows=2, row_force_default=True, row_default_height=50,
                             pos_hint={'center_x': .5})
         layout.add_widget(Label(text=f"Deleted {name.text} from the DB!"))
@@ -389,17 +399,20 @@ class MakeList(App):
         self.popup.open()
         btn.bind(on_press=self.home)
 
+        sql = f"delete from Subject_Data where subject_name = \"{name.text}\""
         try:
             cur.execute(sql)
         except Exception as e:
-            print(e)
+            pass
 
-    def check_attend(self, instance, name):
+    def check_attend(self, _, name):
         self.layout.clear_widgets()
+        self.stop()
         CheckAttendance(name).run()
 
-    def check_marks(self, instance, name):
+    def check_marks(self, _, name):
         self.layout.clear_widgets()
+        self.stop()
         CheckMarks(name).run()
 
 
@@ -424,8 +437,9 @@ class AddSubject(App):
         self.cancel = Button(text="Cancel", on_press=self.home)
         self.popup = Popup(title="Adding subject to DB")
 
-    def home(self, instance):
+    def home(self, _):
         self.layout.clear_widgets()
+        self.stop()
         MainApp().run()
 
     def build(self):
@@ -439,7 +453,7 @@ class AddSubject(App):
         self.layout.add_widget(self.cancel)
         return self.layout
 
-    def insert_and_home(self, instance):
+    def insert_and_home(self, _):
         state = 1 if self.lab.state == 'down' else 0
         try:
             cred = int(self.credits.text)
@@ -464,9 +478,10 @@ class AddSubject(App):
         except Exception as e:
             print(str(e).split(':')[-1].strip())
 
-    def home(self, instance):
+    def home(self, _):
         self.popup.dismiss()
         self.layout.clear_widgets()
+        self.stop()
         MainApp().run()
 
 
@@ -488,20 +503,24 @@ class MainApp(App):
         self.layout.add_widget(self.del_sub)
         return self.layout
 
-    def check_att(self, instance):
+    def check_att(self, _):
         self.layout.clear_widgets()
+        self.stop()
         MakeList(1).run()
 
-    def check_mark(self, instance):
+    def check_mark(self, _):
         self.layout.clear_widgets()
+        self.stop()
         MakeList(3).run()
 
-    def add_subject(self, instance):
+    def add_subject(self, _):
         self.layout.clear_widgets()
+        self.stop()
         AddSubject().run()
 
-    def del_subject(self, instance):
+    def del_subject(self, _):
         self.layout.clear_widgets()
+        self.stop()
         MakeList(2).run()
 
 
