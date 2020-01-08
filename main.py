@@ -20,14 +20,14 @@ def check_if_exists(name, table):
     return name in names
 
 
-def get_gpa(grades, credits):
+def get_gpa(grades, max_creds):
     grade_points = {'S': 10, 'A': 9, 'B': 8, 'C': 7, 'D': 6, 'E': 5, 'F': 0}
-    if None not in grades and len(grades) == len(credits):
+    if None not in grades and len(grades) == len(max_creds):
         score = 0
         for k in range(len(grades)):
-            score += grade_points[grades[k]] * credits[k]
+            score += grade_points[grades[k]] * max_creds[k]
 
-        return round(score / sum(credits), 2)
+        return round(score / sum(max_creds), 2)
 
     return "not enough data"
 
@@ -44,7 +44,6 @@ class CheckMarks(App):
         self.subject_name = name.text
         self.title = self.subject_name
         Window.size = (850, 470)
-
 
     def build(self):
         regex = "(.*):\s+(.*)"
@@ -68,7 +67,7 @@ class CheckMarks(App):
                 ss_mark = None
 
                 if not data:
-                    sql = f"insert into Test_Data (subject_name,t1,q1,t2,q2,t3,q3,ss,grade,percentage) values(\"{self.subject_name}\",NULL,NULL,NULL,NULL,NULL,NULL,NULL,NULL,NULL)"
+                    sql = f"insert into Test_Data (subject_name,t1,q1,t2,q2,t3,q3,ss,grade,percentage) values(\"{self.subject_name}\",NULL,NULL,NULL,NULL,NULL,NULL,NULL,NULL,NULL) "
                     cur.execute(sql)
 
 
@@ -121,11 +120,13 @@ class CheckMarks(App):
 
             return self.layout
 
-    def launch_lab(self, instance):
+    @staticmethod
+    def launch_lab(instance):
         print("LAB")
 
     def home(self, instance):
         self.layout.clear_widgets()
+        self.stop()
         MakeList(3).run()
 
     def submit(self, instance):
@@ -160,12 +161,14 @@ class CheckMarks(App):
         self.update(self_study, "ss")
 
         self.layout.clear_widgets()
+        self.stop()
         MakeList(3).run()
 
     def clear_all(self, instance):
         sql = f"delete from Test_Data where subject_name=\"{self.subject_name}\""
         cur.execute(sql)
         self.layout.clear_widgets()
+        self.stop()
         MakeList(3).run()
 
     def attempts(self, marks):
@@ -281,6 +284,7 @@ class CheckAttendance(App):
 
     def go_home(self, instance):
         self.layout.clear_widgets()
+        self.stop()
         MakeList(1).run()
 
     def reset(self, instance):
@@ -298,6 +302,7 @@ class CheckAttendance(App):
     def home(self, instance):
         self.popup.dismiss()
         self.layout.clear_widgets()
+        self.stop()
         MakeList(1).run()
 
     def missed_class(self, instance):
@@ -348,6 +353,7 @@ class MakeList(App):
     def home(self, instance):
         self.popup.dismiss()
         self.layout.clear_widgets()
+        self.stop()
         MainApp().run()
 
     def build(self):
@@ -376,6 +382,7 @@ class MakeList(App):
 
     def go_to_main(self, instance):
         self.layout.clear_widgets()
+        self.stop()
         MainApp().run()
 
     def remove_subject(self, instance, name):
@@ -396,10 +403,12 @@ class MakeList(App):
 
     def check_attend(self, instance, name):
         self.layout.clear_widgets()
+        self.stop()
         CheckAttendance(name).run()
 
     def check_marks(self, instance, name):
         self.layout.clear_widgets()
+        self.stop()
         CheckMarks(name).run()
 
 
@@ -426,6 +435,7 @@ class AddSubject(App):
 
     def home(self, instance):
         self.layout.clear_widgets()
+        self.stop()
         MainApp().run()
 
     def build(self):
@@ -467,6 +477,7 @@ class AddSubject(App):
     def home(self, instance):
         self.popup.dismiss()
         self.layout.clear_widgets()
+        self.stop()
         MainApp().run()
 
 
@@ -490,18 +501,22 @@ class MainApp(App):
 
     def check_att(self, instance):
         self.layout.clear_widgets()
+        self.stop()
         MakeList(1).run()
 
     def check_mark(self, instance):
         self.layout.clear_widgets()
+        self.stop()
         MakeList(3).run()
 
     def add_subject(self, instance):
         self.layout.clear_widgets()
+        self.stop()
         AddSubject().run()
 
     def del_subject(self, instance):
         self.layout.clear_widgets()
+        self.stop()
         MakeList(2).run()
 
 
