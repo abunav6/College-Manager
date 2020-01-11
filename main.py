@@ -1,6 +1,10 @@
 import re
 from functools import partial
 
+from kivy.config import Config
+
+Config.set('graphics', 'resizable', 0)
+
 from kivy.app import App
 from kivy.core.window import Window
 from kivy.uix.button import Button
@@ -9,7 +13,6 @@ from kivy.uix.gridlayout import GridLayout
 from kivy.uix.label import Label
 from kivy.uix.popup import Popup
 from kivy.uix.textinput import TextInput
-
 from sql_conf import Login
 
 
@@ -260,10 +263,13 @@ class CheckAttendance(App):
             percentage = 100 * round(((self.total - self.missed) / self.total), 4)
             string = f"{self.total - self.missed} / {self.total}          {percentage}%"
         else:
+            percentage = None
             string = "0/0          0%"
 
         self.attendance_display.text = string
         self.attendance_display.bold = True
+
+        self.update_color(percentage)
 
         subject_display = Label(text=self.subject + "        ")
         subject_display.bold = True
@@ -314,7 +320,11 @@ class CheckAttendance(App):
         sql = f"update Attendance_Data set missed = {self.missed}, total={self.total}" \
               f" where subject_name=\"{self.subject}\""
         cur.execute(sql)
+
         self.attendance_display.text = string
+        self.attendance_display.bold = True
+        self.update_color(percentage)
+
         return
 
     def attended_class(self, _):
@@ -324,6 +334,15 @@ class CheckAttendance(App):
         sql = f"update Attendance_Data set total={self.total} where subject_name=\"{self.subject}\""
         cur.execute(sql)
         self.attendance_display.text = string
+        self.attendance_display.bold = True
+        self.update_color(percentage)
+
+    def update_color(self, percentage):
+        if percentage:
+            if percentage > 85:
+                self.attendance_display.color = [0, 1, 0, 1]
+            else:
+                self.attendance_display.color = [1, 0, 0, 1]
 
 
 class MakeList(App):
