@@ -1,6 +1,7 @@
 import re
 from functools import partial
 
+from jinja2 import Template
 from kivy.config import Config
 
 Config.set('graphics', 'resizable', 0)
@@ -14,6 +15,16 @@ from kivy.uix.label import Label
 from kivy.uix.popup import Popup
 from kivy.uix.textinput import TextInput
 from sql_conf import Login
+
+
+def check():
+    sql = "select subject_name from Lab_Data"
+    cur.execute(sql)
+    try:
+        data = [k[0] for k in cur.fetchall()]
+    except:
+        data = []
+    return data
 
 
 def check_if_exists(name, table):
@@ -35,11 +46,131 @@ def get_gpa(grades, max_creds):
     return None
 
 
+class EnterLab(App):
+    def __init__(self, name, **kwargs):
+        super().__init__(**kwargs)
+        self.subject_name = name
+        self.fields, self.marks = [], []
+        if self.subject_name == "Communication Systems II":
+            self.labs = 10
+        elif self.subject_name == "Computer Communication Networks":
+            self.labs = 11
+        else:
+            exit()
+
+        self.layout = self.layout = GridLayout(rows=self.labs + 3, cols=2, row_force_default=True,
+                                               row_default_height=50, pos_hint={'center_x': .5})
+
+        Window.size = (850, 710)
+        temp = """
+               create table if not exists Lab_Data (subject_name LONGTEXT, {% for exp in exps %} `{{exp}}`
+               REAL {{\",\" if not loop.last}} {% endfor %}, internals REAL)
+               """
+        SQL = Template(temp)
+        self.column_names = ["Exp_" + str(i + 1) for i in range(self.labs)]
+
+        cur.execute(str(SQL.render(exps=self.column_names)))
+        self.title = self.subject_name
+        self.internals_field = TextInput()
+
+    def build(self):
+
+        for lab in range(self.labs):
+            lbl = Label(text=f"Experiment {lab + 1}")
+            self.layout.add_widget(lbl)
+            fld = TextInput()
+            self.layout.add_widget(fld)
+            self.fields.append(fld)
+
+        internals = Label(text="Internals")
+
+        self.layout.add_widget(internals)
+        self.layout.add_widget(self.internals_field)
+
+        self.layout.add_widget(Button(text="Clear Lab Marks Data", on_press=self.clear))
+        self.layout.add_widget(Button(text="Submit", on_press=self.submit))
+        self.layout.add_widget(Button(text="Close", on_press=self.close))
+        self.layout.add_widget(Button(text="Home", on_press=self.home))
+
+        sql = f"select *from Lab_Data where subject_name = \"{self.subject_name}\""
+        cur.execute(sql)
+        data = cur.fetchall()
+        for tup in data:
+            labs, inter = tup[1:1 + self.labs], tup[-1]
+            for k in range(len(labs)):
+                if labs[k]:
+                    self.fields[k].text = str(labs[k])
+            if inter:
+                self.internals_field.text = str(inter)
+
+        return self.layout
+
+    def close(self, _):
+        self.layout.clear_widgets()
+        self.stop()
+        MakeList(3).run()
+
+    def submit(self, _):
+        for field in self.fields:
+            self.marks.append(float(field.text) if field.text else None)
+        self.marks.append(float(self.internals_field.text) if self.internals_field.text else None)
+
+        data = check()
+
+        if self.marks[-1]:
+            if self.subject_name in data:
+                sql = f"update Lab_Data set internals={self.marks[-1]} where subject_name = \"{self.subject_name}\""
+            else:
+                sql = f"insert into Lab_Data (subject_name, internals) " \
+                      f"values(\"{self.subject_name}\", {self.marks[-1]})"
+            cur.execute(sql)
+        else:
+            if self.subject_name in data:
+                sql = f"update Lab_Data set internals=NULL where subject_name = \"{self.subject_name}\""
+            else:
+                sql = f"insert into Lab_Data (subject_name, internals) " \
+                      f"values(\"{self.subject_name}\", NULL)"
+            cur.execute(sql)
+
+        for k in range(len(self.marks) - 1):
+            data = check()
+            if self.marks[k]:
+                if self.subject_name in data:
+                    sql = f"update Lab_Data set `Exp_{k + 1}`={self.marks[k]} " \
+                          f"where subject_name = \"{self.subject_name}\""
+                else:
+                    sql = f"insert into Lab_Data (subject_name, `Exp_{k + 1}`) " \
+                          f"values(\"{self.subject_name}\", {self.marks[k]})"
+            else:
+                if self.subject_name in data:
+                    sql = f"update Lab_Data set `Exp_{k + 1}`=NULL where subject_name = \"{self.subject_name}\""
+                else:
+                    sql = f"insert into Lab_Data (subject_name, `Exp_{k + 1}`) values(\"{self.subject_name}\", NULL)"
+            cur.execute(sql)
+
+        self.layout.clear_widgets()
+        self.stop()
+        MakeList(3).run()
+
+    def clear(self, _):
+        sql = f"delete from Lab_Data where subject_name = \"{self.subject_name}\""
+        cur.execute(sql)
+        self.layout.clear_widgets()
+        self.stop()
+        MakeList(3).run()
+
+    def home(self, _):
+        self.layout.clear_widgets()
+        self.stop()
+        MainApp().run()
+
+
 class CheckMarks(App):
 
     def __init__(self, name, **kwargs):
         super().__init__(**kwargs)
         self.MT = 50
+        self.lab_total = 0
         self.max_marks = []
         self.ss_field = TextInput()
         self.inputs_test, self.inputs_quiz = [], []
@@ -47,9 +178,9 @@ class CheckMarks(App):
                                  pos_hint={'center_x': .5})
         self.subject_name = name.text
         self.title = self.subject_name
-        Window.size = (850, 470)
 
     def build(self):
+
         regex = "(.*):\s+(.*)"
         with open("/Users/anubhavdinkar/Desktop/CollegeManager/subject_data.txt", "r") as file:
             lines = file.readlines()
@@ -70,20 +201,51 @@ class CheckMarks(App):
                 cur.execute(sql)
                 data = cur.fetchall()
 
+                sql2 = f"select *from Lab_Data where subject_name = \"{self.subject_name}\""
+                cur.execute(sql2)
+                data2 = cur.fetchall()
+
                 if not data:
                     sql = f"insert into Test_Data (subject_name,t1,q1,t2,q2,t3,q3,ss,grade,percentage) values" \
-                          f"(\"{self.subject_name}\",NULL,NULL,NULL,NULL,NULL,NULL,NULL,NULL,NULL) "
+                          f"(\"{self.subject_name}\",NULL,NULL,NULL,NULL,NULL,NULL,NULL,NULL, NULL) "
                     cur.execute(sql)
+                    Window.size = (850, 470)
 
                 else:
-                    t1, q1, t2, q2, t3, q3, ss_mark = data[0][1:-2]
-                    test = [t1, t2, t3]
-                    quiz = [q1, q2, q3]
                     existing_grade = data[0][-2]
                     existing_percentage = data[0][-1]
+                    ss_mark = data[0][1:-2][-2]
+                    test = data[0][1:-2][0:-1:2]
+                    quiz = data[0][1:-2][1:-1:2]
+
+                    if data2[0][0] == "Communication Systems II":
+                        lab_marks = data2[0][1:11]
+                        internal_marks = data2[0][-1]
+
+                    elif data2[0][0] == "Computer Communication Networks":
+                        lab_marks = data2[0][1:12]
+                        internal_marks = data2[0][-1]
+                        print("2")
+                    else:
+                        lab_marks = internal_marks = None
+
+                    labs_done = sum([k is not None for k in lab_marks])
+                    avg_score = sum([k for k in lab_marks if k is not None]) / labs_done if labs_done else None
+
+                    self.lab_total += avg_score if avg_score else 0
+                    self.lab_total += internal_marks if internal_marks else 0
+                    print("Total", self.lab_total)
+
                     if existing_percentage and existing_grade:
                         self.layout.add_widget(Label(text=f"Grade: {existing_grade}", bold=True))
                         self.layout.add_widget(Label(text=f"Percentage: {existing_percentage}%", bold=True))
+
+                    elif self.lab_total > 0:
+                        lab_max = 10 * ((self.lab_total // 10) + 1)
+                        grade, percentage = self.get_grade(self.lab_total, lab_max)
+                        self.layout.add_widget(Label(text=f"Grade: {grade}", bold=True))
+                        self.layout.add_widget(Label(text=f"Percentage: {percentage}%", bold=True))
+
                     Window.size = (850, 510)
 
             except Exception:
@@ -122,8 +284,11 @@ class CheckMarks(App):
 
             return self.layout
 
-    @staticmethod
-    def launch_lab(_):
+    def launch_lab(self, _):
+        self.layout.clear_widgets()
+        self.stop()
+
+        EnterLab(self.subject_name).run()
         pass
 
     def home(self, _):
@@ -147,9 +312,11 @@ class CheckMarks(App):
         test_count = self.attempts(test_marks)
         quiz_count = self.attempts(quiz_marks)
 
-        if test_count or quiz_count or self_study:
+        if test_count or quiz_count or self_study or self.lab_total > 0:
             score, max_score = self.calc_score(test_marks, quiz_marks, reduction_factor, self_study, qrf, test_count,
                                                quiz_count)
+
+            print(score, max_score)
 
             grade, percentage = self.get_grade(score, max_score)
 
@@ -160,6 +327,7 @@ class CheckMarks(App):
                 self.update(test_marks[i], f"t{i + 1}")
                 self.update(quiz_marks[i], f"q{i + 1}")
             self.update(self_study, "ss")
+            self.update(self.lab_total, "lab_total")
 
         self.layout.clear_widgets()
         self.stop()
@@ -167,6 +335,9 @@ class CheckMarks(App):
 
     def clear_all(self, _):
         sql = f"delete from Test_Data where subject_name=\"{self.subject_name}\""
+        cur.execute(sql)
+
+        sql = f"delete from Lab_data where subject_name=\"{self.subject_name}\""
         cur.execute(sql)
         self.layout.clear_widgets()
         self.stop()
@@ -184,7 +355,6 @@ class CheckMarks(App):
         score = 0
         max_score = 0
         for test in t:
-
             if test:
                 score += test * rf
 
@@ -195,13 +365,20 @@ class CheckMarks(App):
             max_score += self.max_marks[2]
             score += ss
 
+        if self.lab_total > 0:
+            score += self.lab_total
+            if 40 <= self.lab_total <= 50:
+                max_score += 50
+            else:
+                max_score += 40
+
         max_score += (tc * self.MT * rf) + (qc * 10 * qrf)
         return score, max_score
 
     @staticmethod
     def get_grade(sc, ma):
         try:
-            perc = round(100 * round(sc / ma, 4))
+            perc = 100 * round(sc / ma, 4)
         except ZeroDivisionError:
             return
 
@@ -558,6 +735,5 @@ class MainApp(App):
 
 
 if __name__ == '__main__':
-    app = MainApp()
     cnx, cur = Login().connect()
-    app.run()
+    MainApp().run()

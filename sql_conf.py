@@ -23,6 +23,6 @@ class Login:
         cur.execute("create table if not exists Subject_Data (subject_name LONGTEXT, credits INT, lab INT)")
         cur.execute("create table if not exists Attendance_Data (subject_name LONGTEXT, missed INT, total INT)")
         cur.execute("create table if not exists Test_Data (subject_name LONGTEXT, t1 REAL, q1 REAL, t2 REAL, q2 REAL, "
-                    "t3 REAL, q3 REAL, ss REAL, grade VARCHAR(20), percentage REAL)")
+                    "t3 REAL, q3 REAL, ss REAL, lab_total REAL, grade VARCHAR(20), percentage REAL)")
         cnx.autocommit = True
         return cnx, cur
