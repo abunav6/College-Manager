@@ -49,6 +49,7 @@ def get_gpa(grades, max_creds):
 class EnterLab(App):
     def __init__(self, name, **kwargs):
         super().__init__(**kwargs)
+        self.lab_total = 0
         self.subject_name = name
         self.fields, self.marks = [], []
         if self.subject_name == "Communication Systems II":
@@ -117,6 +118,25 @@ class EnterLab(App):
 
         data = check()
 
+        if self.subject_name == "Communication Systems II":
+            lab_marks = self.marks[0:10]
+            internal_marks = self.marks[-1]
+
+        elif self.subject_name == "Computer Communication Networks":
+            lab_marks = self.marks[0:11]
+            internal_marks = self.marks[-1]
+        else:
+            lab_marks = internal_marks = None
+
+        labs_done = sum([k is not None for k in lab_marks])
+        max_lab_score = labs_done * 10
+        avg_score = sum([k for k in lab_marks if k is not None]) * (40 / max_lab_score)
+        self.lab_total += avg_score if avg_score else 0
+        self.lab_total += internal_marks if internal_marks else 0
+
+        sql = f"update Test_Data set lab_total = {self.lab_total} where subject_name =\"{self.subject_name}\""
+        cur.execute(sql)
+
         if self.marks[-1]:
             if self.subject_name in data:
                 sql = f"update Lab_Data set internals={self.marks[-1]} where subject_name = \"{self.subject_name}\""
@@ -170,8 +190,8 @@ class CheckMarks(App):
     def __init__(self, name, **kwargs):
         super().__init__(**kwargs)
         self.MT = 50
-        self.lab_total = 0
         self.max_marks = []
+        self.lab_total = 0
         self.ss_field = TextInput()
         self.inputs_test, self.inputs_quiz = [], []
         self.layout = GridLayout(rows=12, cols=2, row_force_default=True, row_default_height=50,
@@ -182,6 +202,7 @@ class CheckMarks(App):
     def build(self):
 
         regex = "(.*):\s+(.*)"
+
         with open("/Users/anubhavdinkar/Desktop/CollegeManager/subject_data.txt", "r") as file:
             lines = file.readlines()
             flag = False
@@ -196,14 +217,15 @@ class CheckMarks(App):
             test = [None] * 3
             quiz = [None] * 3
             ss_mark = None
+            self.max_marks = [int(k) for k in max_marks.split("+")]
+            reduction_factor = self.max_marks[0] / (3 * self.MT)
+
+            qrf = self.max_marks[1] / (3 * 10)
             try:
                 sql = f"select *from Test_Data where subject_name = \"{self.subject_name}\""
                 cur.execute(sql)
                 data = cur.fetchall()
-
-                sql2 = f"select *from Lab_Data where subject_name = \"{self.subject_name}\""
-                cur.execute(sql2)
-                data2 = cur.fetchall()
+                print(data)
 
                 if not data:
                     sql = f"insert into Test_Data (subject_name,t1,q1,t2,q2,t3,q3,ss,grade,percentage) values" \
@@ -212,46 +234,21 @@ class CheckMarks(App):
                     Window.size = (850, 470)
 
                 else:
-                    existing_grade = data[0][-2]
-                    existing_percentage = data[0][-1]
                     ss_mark = data[0][1:-2][-2]
                     test = data[0][1:-2][0:-1:2]
                     quiz = data[0][1:-2][1:-1:2]
-
-                    if data2[0][0] == "Communication Systems II":
-                        lab_marks = data2[0][1:11]
-                        internal_marks = data2[0][-1]
-
-                    elif data2[0][0] == "Computer Communication Networks":
-                        lab_marks = data2[0][1:12]
-                        internal_marks = data2[0][-1]
-                        print("2")
-                    else:
-                        lab_marks = internal_marks = None
-
-                    labs_done = sum([k is not None for k in lab_marks])
-                    avg_score = sum([k for k in lab_marks if k is not None]) / labs_done if labs_done else None
-
-                    self.lab_total += avg_score if avg_score else 0
-                    self.lab_total += internal_marks if internal_marks else 0
-                    print("Total", self.lab_total)
-
-                    if existing_percentage and existing_grade:
-                        self.layout.add_widget(Label(text=f"Grade: {existing_grade}", bold=True))
-                        self.layout.add_widget(Label(text=f"Percentage: {existing_percentage}%", bold=True))
-
-                    elif self.lab_total > 0:
-                        lab_max = 10 * ((self.lab_total // 10) + 1)
-                        grade, percentage = self.get_grade(self.lab_total, lab_max)
-                        self.layout.add_widget(Label(text=f"Grade: {grade}", bold=True))
-                        self.layout.add_widget(Label(text=f"Percentage: {percentage}%", bold=True))
-
+                    self.lab_total = data[0][-3] if data[0][-3] else 0
+                    print(self.lab_total)
+                    tc = self.attempts(test)
+                    qc = self.attempts(quiz)
+                    score, max_score = self.calc_score(test, quiz, reduction_factor, ss_mark, qrf, tc, qc)
+                    grade, percentage = self.get_grade(score, max_score)
+                    self.layout.add_widget(Label(text=f"Grade: {grade}", bold=True))
+                    self.layout.add_widget(Label(text=f"Percentage: {percentage}%", bold=True))
                     Window.size = (850, 510)
 
             except Exception:
                 pass
-
-            self.max_marks = [int(k) for k in max_marks.split("+")]
 
             for i in range(3):
                 lbl = Label(text=f"Test {i + 1}")
@@ -328,6 +325,10 @@ class CheckMarks(App):
                 self.update(quiz_marks[i], f"q{i + 1}")
             self.update(self_study, "ss")
             self.update(self.lab_total, "lab_total")
+        else:
+            sql = "update Test_Data set t1=NULL, t2=NULL, t3=NULL, q1=NULL, q2=NULL, q3=NULL, ss=NULL, lab_total=NULL," \
+                  " grade=NULL, percentage=NULL"
+            cur.execute(sql)
 
         self.layout.clear_widgets()
         self.stop()
@@ -367,6 +368,7 @@ class CheckMarks(App):
 
         if self.lab_total > 0:
             score += self.lab_total
+            print(self.lab_total)
             if 40 <= self.lab_total <= 50:
                 max_score += 50
             else:
