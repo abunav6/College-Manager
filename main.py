@@ -232,19 +232,27 @@ class CheckMarks(App):
                           f"(\"{self.subject_name}\",NULL,NULL,NULL,NULL,NULL,NULL,NULL,NULL, NULL) "
                     cur.execute(sql)
                     Window.size = (850, 470)
+                    test, quiz, ss_mark, self.lab_total = None, None, None, 0
 
                 else:
                     ss_mark = data[0][1:-2][-2]
                     test = data[0][1:-2][0:-1:2]
                     quiz = data[0][1:-2][1:-1:2]
                     self.lab_total = data[0][-3] if data[0][-3] else 0
-                    print(self.lab_total)
                     tc = self.attempts(test)
                     qc = self.attempts(quiz)
-                    score, max_score = self.calc_score(test, quiz, reduction_factor, ss_mark, qrf, tc, qc)
-                    grade, percentage = self.get_grade(score, max_score)
-                    self.layout.add_widget(Label(text=f"Grade: {grade}", bold=True))
-                    self.layout.add_widget(Label(text=f"Percentage: {percentage}%", bold=True))
+                    flag = True
+                    if data[0][-1] and data[0][-2]:
+                        self.layout.add_widget(Label(text=f"Grade: {data[0][-2]}", bold=True))
+                        self.layout.add_widget(Label(text=f"Percentage: {data[0][-1]}%", bold=True))
+                        flag = False
+
+                    if flag:
+                        score, max_score = self.calc_score(test, quiz, reduction_factor, ss_mark, qrf, tc, qc)
+                        grade, percentage = self.get_grade(score, max_score)
+                        self.layout.add_widget(Label(text=f"Grade: {grade}", bold=True))
+                        self.layout.add_widget(Label(text=f"Percentage: {percentage}%", bold=True))
+
                     Window.size = (850, 510)
 
             except Exception:
@@ -326,8 +334,8 @@ class CheckMarks(App):
             self.update(self_study, "ss")
             self.update(self.lab_total, "lab_total")
         else:
-            sql = "update Test_Data set t1=NULL, t2=NULL, t3=NULL, q1=NULL, q2=NULL, q3=NULL, ss=NULL, lab_total=NULL," \
-                  " grade=NULL, percentage=NULL"
+            sql = "update Test_Data set t1=NULL, t2=NULL, t3=NULL, q1=NULL, q2=NULL, q3=NULL, " \
+                  "ss=NULL, lab_total=NULL, grade=NULL, percentage=NULL"
             cur.execute(sql)
 
         self.layout.clear_widgets()
