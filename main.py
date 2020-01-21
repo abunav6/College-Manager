@@ -427,6 +427,7 @@ class CheckAttendance(App):
     def __init__(self, name, **kwargs):
         super().__init__(**kwargs)
         self.attendance_display = Label()
+        self.information = Label()
         self.subject = name.text
         self.layout = GridLayout(cols=2, row_force_default=True, row_default_height=50,
                                  pos_hint={'center_x': .5})
@@ -458,6 +459,9 @@ class CheckAttendance(App):
 
         self.update_color(percentage)
 
+        message, number, status = self.update_info(percentage)
+        info, number = self.get_labels(message, number, status)
+
         subject_display = Label(text=self.subject + "        ")
         subject_display.bold = True
 
@@ -468,7 +472,10 @@ class CheckAttendance(App):
         clear_all = Button(text="Clear All Data", on_press=self.reset)
 
         self.layout.add_widget(subject_display)
+
         self.layout.add_widget(self.attendance_display)
+        self.layout.add_widget(info)
+        self.layout.add_widget(number)
         self.layout.add_widget(missed_class)
         self.layout.add_widget(attended_class)
 
@@ -512,7 +519,6 @@ class CheckAttendance(App):
         self.attendance_display.bold = True
         self.update_color(percentage)
 
-        return
 
     def attended_class(self, _):
         self.total += 1
@@ -524,13 +530,50 @@ class CheckAttendance(App):
         self.attendance_display.bold = True
         self.update_color(percentage)
 
+
     def update_color(self, percentage):
         if percentage:
-            if percentage > 85:
+            if percentage >= 85:
                 self.attendance_display.color = [0, 1, 0, 1]
+            elif 75 <= percentage < 85:
+                self.attendance_display.color = [1, 0.2823, 0, 1]
             else:
                 self.attendance_display.color = [1, 0, 0, 1]
 
+    def update_info(self, percentage):
+        if percentage:
+            if percentage >= 85:
+                n = round(((self.total - self.missed) - 0.85 * self.total) / 0.85)
+                string1 = "No. of classes you can miss to stay on track: "
+                flag = True
+            else:
+                n = round((0.85 * self.total - (self.total - self.missed)) / 0.15)
+                string1 = "No. of classes you need to attend to stay on track: "
+                flag = False
+
+            if n > 0:
+                string2 = str(n)
+            else:
+                string1 = "Do not miss the next class"
+                string2 = f"Percentage will drop to : {100 * round(((self.total - self.missed) / (self.total + 1)), 4)}%"
+                flag = False
+
+            return string1, string2, flag
+        else:
+            return None, None, None
+
+    def get_labels(self, message, number, status):
+        if message:
+            info = Label(text=message)
+            number = Label(text=number)
+            if status:
+                info.color = number.color = [0, 1, 0, 1]
+            else:
+                info.color = number.color = [1, 0, 0, 1]
+        else:
+            info = Label(text="")
+            number = Label(text="")
+        return info, number
 
 class MakeList(App):
     def __init__(self, code, **kwargs):
