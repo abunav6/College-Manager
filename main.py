@@ -519,7 +519,6 @@ class CheckAttendance(App):
         self.attendance_display.bold = True
         self.update_color(percentage)
 
-
     def attended_class(self, _):
         self.total += 1
         percentage = 100 * round(((self.total - self.missed) / self.total), 4)
@@ -529,7 +528,6 @@ class CheckAttendance(App):
         self.attendance_display.text = string
         self.attendance_display.bold = True
         self.update_color(percentage)
-
 
     def update_color(self, percentage):
         if percentage:
@@ -555,14 +553,16 @@ class CheckAttendance(App):
                 string2 = str(n)
             else:
                 string1 = "Do not miss the next class"
-                string2 = f"Percentage will drop to : {100 * round(((self.total - self.missed) / (self.total + 1)), 4)}%"
+                string2 = f"Percentage will drop to : " \
+                          f"{100 * round(((self.total - self.missed) / (self.total + 1)), 4)}%"
                 flag = False
 
             return string1, string2, flag
         else:
             return None, None, None
 
-    def get_labels(self, message, number, status):
+    @staticmethod
+    def get_labels(message, number, status):
         if message:
             info = Label(text=message)
             number = Label(text=number)
@@ -574,6 +574,7 @@ class CheckAttendance(App):
             info = Label(text="")
             number = Label(text="")
         return info, number
+
 
 class MakeList(App):
     def __init__(self, code, **kwargs):
