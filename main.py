@@ -87,11 +87,11 @@ class EnterLab(App):
 
         self.layout.add_widget(internals)
         self.layout.add_widget(self.internals_field)
-
         self.layout.add_widget(Button(text="Clear Lab Marks Data", on_press=self.clear))
         self.layout.add_widget(Button(text="Submit", on_press=self.submit))
         self.layout.add_widget(Button(text="Close", on_press=self.close))
         self.layout.add_widget(Button(text="Home", on_press=self.home))
+
 
         sql = f"select *from Lab_Data where subject_name = \"{self.subject_name}\""
         cur.execute(sql)
@@ -189,7 +189,6 @@ class CheckMarks(App):
 
     def __init__(self, name, **kwargs):
         super().__init__(**kwargs)
-        self.MT = 50
         self.max_marks = []
         self.lab_total = 0
         self.ss_field = TextInput()
@@ -218,14 +217,14 @@ class CheckMarks(App):
             quiz = [None] * 3
             ss_mark = None
             self.max_marks = [int(k) for k in max_marks.split("+")]
-            reduction_factor = self.max_marks[0] / (3 * self.MT)
+            reduction_factor = self.max_marks[0] / (3 * 50)
 
             qrf = self.max_marks[1] / (3 * 10)
             try:
                 sql = f"select *from Test_Data where subject_name = \"{self.subject_name}\""
                 cur.execute(sql)
                 data = cur.fetchall()
-                print(data)
+                # print(data)
 
                 if not data:
                     sql = f"insert into Test_Data (subject_name,t1,q1,t2,q2,t3,q3,ss,grade,percentage) values" \
@@ -302,11 +301,8 @@ class CheckMarks(App):
         MakeList(3).run()
 
     def submit(self, _):
-        if self.max_marks[0] == 30:
-            self.MT = 25  # change the MT after TEST 1 (as it could be out of 30 too)
-
-        reduction_factor = self.max_marks[0] / (3 * self.MT)
-        qrf = self.max_marks[1] / (3 * 10)
+        reduction_factor = self.max_marks[0] / 150
+        qrf = self.max_marks[1] / 30
         test_marks = []
         quiz_marks = []
         for i in range(3):
@@ -376,13 +372,13 @@ class CheckMarks(App):
 
         if self.lab_total > 0:
             score += self.lab_total
-            print(self.lab_total)
+            # print(self.lab_total)
             if 40 <= self.lab_total <= 50:
                 max_score += 50
             else:
                 max_score += 40
 
-        max_score += (tc * self.MT * rf) + (qc * 10 * qrf)
+        max_score += (tc * 50 * rf) + (qc * 10 * qrf)
         return score, max_score
 
     @staticmethod
@@ -448,7 +444,7 @@ class CheckAttendance(App):
             sql = f"insert into Attendance_Data (subject_name, missed, total) values(\"{self.subject}\",0,0)"
             cur.execute(sql)
         if self.total:
-            percentage = 100 * round(((self.total - self.missed) / self.total), 4)
+            percentage = round(100 * ((self.total - self.missed) / self.total),2)
             string = f"{self.total - self.missed} / {self.total}          {percentage}%"
         else:
             percentage = None
@@ -509,7 +505,7 @@ class CheckAttendance(App):
     def missed_class(self, _):
         self.missed += 1
         self.total += 1
-        percentage = 100 * round(((self.total - self.missed) / self.total), 4)
+        percentage = round(100 * ((self.total - self.missed) / self.total), 2)
         string = f"{self.total - self.missed} / {self.total}          {percentage}%"
         sql = f"update Attendance_Data set missed = {self.missed}, total={self.total}" \
               f" where subject_name=\"{self.subject}\""

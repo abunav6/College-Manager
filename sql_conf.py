@@ -17,6 +17,7 @@ class Login:
         cnx = mysql.connect(user=self.sql_data['uname'], password=self.sql_data['pwd'], host=self.sql_data['host'],
                             buffered=True)
         cur = cnx.cursor()
+        cnx.cmd_query('SET GLOBAL connect_timeout = 6000')
         cur.execute("create database if not exists College_Manager")
         cnx.database = "College_Manager"
         cur.execute("use College_Manager")
@@ -25,4 +26,5 @@ class Login:
         cur.execute("create table if not exists Test_Data (subject_name LONGTEXT, t1 REAL, q1 REAL, t2 REAL, q2 REAL, "
                     "t3 REAL, q3 REAL, ss REAL, lab_total REAL, grade VARCHAR(20), percentage REAL)")
         cnx.autocommit = True
+
         return cnx, cur
